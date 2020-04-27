@@ -8,6 +8,9 @@ from babyevents.serializers import ParentSerializer, BabySerializer, EventSerial
 from permissions.services import APIPermissionClassFactory
 from babyevents.models import Parent, Baby, Event
 
+def evaluate(user, obj, request):
+    return user.username == obj.name
+
 class ParentViewSet(viewsets.ModelViewSet):
     queryset = Parent.objects.all()
     serializer_class = ParentSerializer
@@ -15,11 +18,18 @@ class ParentViewSet(viewsets.ModelViewSet):
     @action(detail = True, methods=['get'])
     def babies(self, request , pk = None):
         parent = self.get_object()
-        babies = Baby.objects.filter(pid=parent)
-        return Response({
-            'status':'ok',
-            'Babies': (x.name for x in babies)
-        })
+        print(Parent.objects.filter(pid=pk)[0].name,"QUERY")
+        print(parent.name,"MAGIA")
+        if (Parent.objects.filter(pid=pk)[0].name == parent.name):
+            babies = Baby.objects.filter(pid=parent)
+            return Response({
+                'status':'ok',
+                'Babies': (x.name for x in babies)
+            })
+        else:
+            return Response({
+                'status':'Permission denied'
+            })
 
 def evaluar(user, obj, request):
     return user.username == obj.pid.name
@@ -34,7 +44,7 @@ class BabyViewSet(viewsets.ModelViewSet):
             permission_configuration={
                 'base': {
                     'create': True,
-                    'list': True,
+                    'list': False   ,
                 },
                 'instance': {
                     'retrieve': 'babyevents.view_baby',
@@ -65,10 +75,35 @@ class BabyViewSet(viewsets.ModelViewSet):
         assign_perm('babies.change_baby', user, baby)
         return Response(serializer.data)
 
+def evaluate(user, obj, request):
+    print(user,'\n\n HOLA \n\n')
+    for x in Baby.objects.filter( pid__name = user.username):
+        if(x.bid == request.bid):
+            return True
+    return False
 class EventsViewSet(viewsets.ModelViewSet):
     queryset = Event.objects.all()
     serializer_class = EventSerializer
     
+    permission_classes = (
+        APIPermissionClassFactory(
+            name='EventPermission',
+            permission_configuration={
+                'base': {
+                    'create': False,
+                    'list': False   ,
+                },
+                'instance': {
+                    'retrieve': 'babyevents.view_event',
+                    'destroy': False,
+                    'update': True,
+                    'partial_update': 'babyevents.change_event',
+                    'events': evaluate
+                }
+            }
+        ),
+    )
+
     def perform_create(self, serializer):
         serializer.save()
         return Response(serializer.data)
