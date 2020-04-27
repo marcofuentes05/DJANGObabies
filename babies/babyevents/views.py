@@ -14,22 +14,34 @@ def evaluate(user, obj, request):
 class ParentViewSet(viewsets.ModelViewSet):
     queryset = Parent.objects.all()
     serializer_class = ParentSerializer
-    
+    permission_classes = (
+        APIPermissionClassFactory(
+            name='ParentPermission',
+            permission_configuration={
+                'base': {
+                    'create': True,
+                    'list': False   ,
+                },
+                'instance': {
+                    'retrieve': 'babyevents.view_parent',
+                    'destroy': False,
+                    'update': True,
+                    'partial_update': 'babyevents.change_parent',
+                    'events': 'babyevents.view_parent',
+                    'babies': 'babyevents.view_parent'
+                }
+            }
+        ),
+    )
     @action(detail = True, methods=['get'])
     def babies(self, request , pk = None):
         parent = self.get_object()
-        print(Parent.objects.filter(pid=pk)[0].name,"QUERY")
-        print(parent.name,"MAGIA")
-        if (Parent.objects.filter(pid=pk)[0].name == parent.name):
-            babies = Baby.objects.filter(pid=parent)
-            return Response({
-                'status':'ok',
-                'Babies': (x.name for x in babies)
-            })
-        else:
-            return Response({
-                'status':'Permission denied'
-            })
+        babies = Baby.objects.filter(pid=parent)
+        return Response({
+            'status':'ok',
+            'Babies': (x.name for x in babies)
+        })
+        
 
 def evaluar(user, obj, request):
     return user.username == obj.pid.name
@@ -68,12 +80,22 @@ class BabyViewSet(viewsets.ModelViewSet):
         })
 
     def perform_create(self, serializer):
-        self.pid = Parent.objects.filter(name = self.request.user)[0].pid
-        baby = serializer.save()
-        user = self.request.user
-        assign_perm('babies.view_baby', user,baby)
-        assign_perm('babies.change_baby', user, baby)
-        return Response(serializer.data)
+        parent = self.request.user
+        pi = serializer.validated_data['pid']
+        print('\n\n\n',Parent.objects.filter(pid = pi.pid)[0].name,'\n\n\n')
+        print(parent)
+        print('\n\n\n',str(parent)== str(Parent.objects.filter(pid = pi.pid)[0].name))
+        if (str(parent)== str(Parent.objects.filter(pid = pi.pid)[0].name)):
+            print("SI ENTRAMOOOOSO")
+            baby = serializer.save()
+            user = self.request.user
+            assign_perm('babies.view_baby', user,baby)
+            assign_perm('babies.change_baby', user, baby)
+            return Response(serializer.data)
+        return Response({
+            'status':'Not authorized'
+        })
+
 
 def evaluate(user, obj, request):
     print(user,'\n\n HOLA \n\n')
@@ -81,6 +103,8 @@ def evaluate(user, obj, request):
         if(x.bid == request.bid):
             return True
     return False
+
+
 class EventsViewSet(viewsets.ModelViewSet):
     queryset = Event.objects.all()
     serializer_class = EventSerializer
@@ -90,7 +114,7 @@ class EventsViewSet(viewsets.ModelViewSet):
             name='EventPermission',
             permission_configuration={
                 'base': {
-                    'create': False,
+                    'create': True,
                     'list': False   ,
                 },
                 'instance': {
@@ -105,9 +129,16 @@ class EventsViewSet(viewsets.ModelViewSet):
     )
 
     def perform_create(self, serializer):
-        serializer.save()
-        return Response(serializer.data)
-
+        parent = self.request.user
+        baby = Baby.objects.filter(name=serializer.validated_data['bid'])[0].pid.name
+        print(' \n\n\n',parent)
+        if (str(parent) == str(baby)):
+            event = serializer.save()
+            return Response(serializer.data)
+        print('\n\n\nYa salimos\n\n\n')
+        return Response({
+            'status':'Not authorized'
+        })
     # @action(detail = True, methods=['post'])
     # def events(self, request, pk = None):
     #     # Necesita campos etype, comment, babyid
